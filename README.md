@@ -1,0 +1,2 @@
+# pmomake
+PMO lint
