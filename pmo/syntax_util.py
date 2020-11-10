@@ -3,6 +3,14 @@ from datetime import date as Date
 import re
 
 
+def clear_comment(lines: List[str]) -> Iterator[str]:
+    for line in lines:
+        if '//' in line:
+            yield line.split('//', 1)[0]
+        else:
+            yield line
+
+
 class block_tuple_t(NamedTuple):
     start_line_no: int
     end_line_no: int

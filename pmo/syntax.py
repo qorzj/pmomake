@@ -41,6 +41,7 @@ class Project:
     block_index: Dict[MilestoneKey, 'Block']
 
     def __init__(self, lines: List[str]) -> None:
+        self.blocks = []
         self.milestone_index = {}
         self.block_index = {}
         for start_line_no, end_line_no in split_into_blocks(lines):
@@ -55,8 +56,10 @@ class Project:
 
     def report(self) -> None:
         milestones = list(m for m in self.milestone_index.values() if m.done_date is None)
-        milestones.sort(key = lambda m: str(m.will_finish), reverse=True)
+        milestones.sort(key = lambda m: m.rank_weight, reverse=True)
         deadline_error = False
+        print('  will_finish < milestone < due_date')
+        print('----------------------------------------')
         for milestone in milestones:
             safe_sign: str
             if milestone.due_date and milestone.will_finish and milestone.will_finish <= milestone.due_date:
@@ -65,7 +68,7 @@ class Project:
                 safe_sign, deadline_error = '✗', True
             will_finish_str = str(milestone.will_finish.date()) if milestone.will_finish else ' ' * len('2000-01-01')
             due_date_str = str(milestone.due_date.date()) if milestone.due_date else ' ' * len('2000-01-01')
-            print(f'{safe_sign}  {will_finish_str} < {milestone} < {due_date_str}')
+            print(f'{safe_sign}  {will_finish_str} < {milestone.key} < {due_date_str}')
         total = len(self.milestone_index)
         undone_count = len(milestones)
         if deadline_error:
@@ -91,27 +94,32 @@ class Project:
         """
         计算milestone的预估完成时间，并且更新到milestone_index
         """
-        if milestone_key not in self.blocks:
+        if milestone_key not in self.block_index:
             return None
         if milestone_key in self.milestone_index:
             return self.milestone_index[milestone_key]
         all_dependence_done = True
-        all_dependence_will_finish = True
+        all_dependence_finishable = True
         will_finish: Datetime = Datetime(1970, 1, 1, 0, 0, 0)
+        rank_weight: Datetime = Datetime.now()
         block = self.block_index[milestone_key]
         for dependence_key in block.dependence_line.dependences:
             if isinstance(dependence_key, Datetime):
                 will_finish = max(will_finish, dependence_key)
+                rank_weight = max(rank_weight, dependence_key)
             else:
                 dependence: Optional[Milestone] = self.dfs(dependence_key)
                 if dependence is None:
-                    raise PmoGrammerError(f'{dependence_key}的依赖项未定义!')
+                    raise PmoGrammerError(f'"{dependence_key}"的依赖项未定义!')
+                if dependence.done_date is None and dependence.will_finish is None:
+                    all_dependence_finishable = False
                 if dependence.done_date is None:
                     all_dependence_done = False
-                if dependence.will_finish is None:
-                    all_dependence_will_finish = False
+                    if dependence.will_finish:
+                        will_finish = max(will_finish, dependence.will_finish)
                 else:
-                    will_finish = max(will_finish, dependence.will_finish)
+                    will_finish = max(will_finish, dependence.done_date)
+                rank_weight = max(rank_weight, dependence.rank_weight)
         # 依赖项没有预估完成时间 -> will_finish=None
         # 预估时长为.estimate & all_dependence_done -> 语法异常
         # 预估时长为.unknown & promise未完成 -> will_finish=None
@@ -119,7 +127,7 @@ class Project:
         # 预估时长为.unknown & promise=None -> 语法异常
         # 其他 -> will_finish += 总预估时长
         total_minute = 0
-        if not all_dependence_will_finish:
+        if not all_dependence_finishable:
             total_minute = 99999999
         for estimate_line in block.estimate_lines:
             estimate_time: 'EstimateTime' = estimate_line.estimate_time
@@ -148,6 +156,7 @@ class Project:
             milestone.will_finish = None
         else:
             milestone.will_finish = IDatetime.add(will_finish, minutes=total_minute)
+        milestone.rank_weight = IDatetime.add(rank_weight, minutes=1)
         # 更新到milestone_index
         self.milestone_index[milestone_key] = milestone
         return milestone
@@ -182,9 +191,9 @@ class DependenceLine:
             elif is_milestone(dependence_word):
                 self.dependences.append(MilestoneKey(name=dependence_word, promise=False))
             elif is_promise(dependence_word):
-                self.dependences.append(MilestoneKey(name=dependence_word, promise=True))
+                self.dependences.append(MilestoneKey(name=promise_core(dependence_word), promise=True))
             else:
-                raise PmoSyntaxError(f"依赖项({dependence_word})不合法")
+                raise PmoSyntaxError(f'依赖项"{dependence_word}"不合法')
 
 
 class EstimateLine:
@@ -204,9 +213,9 @@ class EstimateLine:
             if is_estimate_time(first_seg) and is_estimate_time(second_seg):
                 self.estimate_time = EstimateTime(EstimateTimeTopic.estimate, (IDatetime.minute_of_str(first_seg), IDatetime.minute_of_str(second_seg)))
             else:
-                raise PmoSyntaxError(f"预估时长({est_word})不合法")
+                raise PmoSyntaxError(f'预估时长"{est_word}"不合法')
         else:
-            raise PmoSyntaxError(f"预估时长({est_word})不合法")
+            raise PmoSyntaxError(f'预估时长"{est_word}"不合法')
 
 
 class Milestone:
@@ -215,6 +224,7 @@ class Milestone:
     will_finish: Optional[Datetime]  # 预估完成时间(乐观)
     due_date: Optional[Datetime]
     done_date: Optional[Datetime]
+    rank_weight: Datetime
 
     def __init__(self, word: str) -> None:
         self.will_finish = None
@@ -224,13 +234,13 @@ class Milestone:
             name_part, date_part = word.split('=', 1)
             date_part = date_part.strip()
             if not is_date(date_part):
-                raise PmoSyntaxError(f"完成日期({date_part})不合法")
+                raise PmoSyntaxError(f'完成日期"{date_part}"不合法')
             self.done_date = IDatetime.noon_of_str(date_part)
         elif '<' in word:
             name_part, date_part = word.split('<', 1)
             date_part = date_part.strip()
             if not is_date(date_part):
-                raise PmoSyntaxError(f"Deadline日期({date_part})不合法")
+                raise PmoSyntaxError(f'Deadline日期"{date_part}"不合法')
             self.due_date = IDatetime.noon_of_str(date_part.strip())
         else:
             name_part = word
@@ -242,7 +252,7 @@ class Milestone:
             self.name = name_part
             self.promise = False
         else:
-            raise PmoSyntaxError(f"依赖项({name_part})不合法")
+            raise PmoSyntaxError(f'依赖项"{name_part}"不合法')
 
 
     @property
