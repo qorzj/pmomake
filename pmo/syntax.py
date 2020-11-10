@@ -60,17 +60,27 @@ class Project:
         deadline_error = False
         print('  will_finish < milestone < due_date')
         print('----------------------------------------')
+        now_at = Datetime.now()
         for milestone in milestones:
             safe_sign: str
-            if milestone.due_date and milestone.will_finish and milestone.will_finish <= milestone.due_date:
-                safe_sign = '✓'
+            if milestone.will_finish is None:
+                safe_sign = '✗'
+            elif milestone.will_finish < now_at:
+                safe_sign = '✗'
+            elif milestone.due_date and milestone.will_finish > milestone.due_date:
+                safe_sign = '✗'
+            elif not milestone.due_date and milestone.promise:
+                safe_sign = '✗'
             else:
-                safe_sign, deadline_error = '✗', True
+                safe_sign = '✓'
+            if safe_sign == '✗':
+                deadline_error = True
             will_finish_str = str(milestone.will_finish.date()) if milestone.will_finish else ' ' * len('2000-01-01')
             due_date_str = str(milestone.due_date.date()) if milestone.due_date else ' ' * len('2000-01-01')
             print(f'{safe_sign}  {will_finish_str} < {milestone.key} < {due_date_str}')
         total = len(self.milestone_index)
         undone_count = len(milestones)
+        print('----------------------------------------')
         if deadline_error:
             print(f'✗  {total - undone_count}/{total} milestones done.')
             exit(1)
@@ -88,7 +98,7 @@ class Project:
             self.dfs(milestone.key)
         except PmoGrammerError as e:
             print(e)
-            exit(0)
+            exit(1)
 
     def dfs(self, milestone_key: 'MilestoneKey') -> Optional['Milestone']:
         """
@@ -145,6 +155,7 @@ class Project:
                     raise PmoGrammerError(f'{milestone_key}：promise已完成，预估时长必须确定!' )
                 else:
                     total_minute = 99999999
+                    rank_weight = max(rank_weight, promise_milestone.rank_weight)
             elif estimate_time_topic == EstimateTimeTopic.unknown:
                 raise PmoGrammerError(f'{milestone_key}：promise里程碑的预估时长必须确定!')
             elif estimate_time_topic == EstimateTimeTopic.duration:
