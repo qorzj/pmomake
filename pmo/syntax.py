@@ -75,9 +75,12 @@ class Project:
                 safe_sign = '✓'
             if safe_sign == '✗':
                 deadline_error = True
-            will_finish_str = str(milestone.will_finish.date()) if milestone.will_finish else ' ' * len('2000-01-01')
+            if milestone.will_finish:
+                will_finish_str = ' ' + str(milestone.will_finish.date())
+            else:
+                will_finish_str = '~' + str(milestone.rank_weight.date())
             due_date_str = str(milestone.due_date.date()) if milestone.due_date else ' ' * len('2000-01-01')
-            print(f'{safe_sign}  {will_finish_str} < {milestone.key} < {due_date_str}')
+            print(f'{safe_sign} {will_finish_str} < {milestone.key} < {due_date_str}')
         total = len(self.milestone_index)
         undone_count = len(milestones)
         print('----------------------------------------')
@@ -127,9 +130,10 @@ class Project:
                     all_dependence_done = False
                     if dependence.will_finish:
                         will_finish = max(will_finish, dependence.will_finish)
+                    rank_weight = max(rank_weight, dependence.rank_weight)
                 else:
                     will_finish = max(will_finish, dependence.done_date)
-                rank_weight = max(rank_weight, dependence.rank_weight)
+                    rank_weight = max(rank_weight, dependence.done_date)
         # 依赖项没有预估完成时间 -> will_finish=None
         # 预估时长为.estimate & all_dependence_done -> 语法异常
         # 预估时长为.unknown & promise未完成 -> will_finish=None
@@ -137,8 +141,6 @@ class Project:
         # 预估时长为.unknown & promise=None -> 语法异常
         # 其他 -> will_finish += 总预估时长
         total_minute = 0
-        if not all_dependence_finishable:
-            total_minute = 99999999
         for estimate_line in block.estimate_lines:
             estimate_time: 'EstimateTime' = estimate_line.estimate_time
             estimate_time_topic = estimate_time.topic()
@@ -163,11 +165,11 @@ class Project:
             else:
                 raise NotImplementedError
         milestone: Milestone = block.dependence_line.milestone
-        if will_finish.year == 1970 or total_minute >= 99999999:
+        if not all_dependence_finishable or will_finish.year == 1970 or total_minute >= 99999999:
             milestone.will_finish = None
         else:
             milestone.will_finish = IDatetime.add(will_finish, minutes=total_minute)
-        milestone.rank_weight = IDatetime.add(rank_weight, minutes=1)
+        milestone.rank_weight = IDatetime.add(rank_weight, minutes=60 if total_minute >= 99999999 else total_minute)
         # 更新到milestone_index
         self.milestone_index[milestone_key] = milestone
         return milestone
@@ -235,7 +237,7 @@ class Milestone:
     will_finish: Optional[Datetime]  # 预估完成时间(乐观)
     due_date: Optional[Datetime]
     done_date: Optional[Datetime]
-    rank_weight: Datetime
+    rank_weight: Datetime  # 把.unknown当成1h的预估完成时间
 
     def __init__(self, word: str) -> None:
         self.will_finish = None

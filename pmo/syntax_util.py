@@ -5,8 +5,8 @@ import re
 
 def clear_comment(lines: List[str]) -> Iterator[str]:
     for line in lines:
-        if '//' in line:
-            yield line.split('//', 1)[0]
+        if '#' in line:
+            yield line.split('#', 1)[0]
         else:
             yield line
 
