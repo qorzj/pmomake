@@ -40,7 +40,7 @@ class Project:
     milestone_index: Dict[MilestoneKey, 'Milestone']
     block_index: Dict[MilestoneKey, 'Block']
 
-    def __init__(self, lines) -> None:
+    def __init__(self, lines: List[str]) -> None:
         self.milestone_index = {}
         self.block_index = {}
         for start_line_no, end_line_no in split_into_blocks(lines):
@@ -66,8 +66,13 @@ class Project:
             will_finish_str = str(milestone.will_finish.date()) if milestone.will_finish else ' ' * len('2000-01-01')
             due_date_str = str(milestone.due_date.date()) if milestone.due_date else ' ' * len('2000-01-01')
             print(f'{safe_sign}  {will_finish_str} < {milestone} < {due_date_str}')
+        total = len(self.milestone_index)
+        undone_count = len(milestones)
         if deadline_error:
+            print(f'✗  {total - undone_count}/{total} milestones done.')
             exit(1)
+        else:
+            print(f'✓  {total - undone_count}/{total} milestones done.')
 
     def dfs_milestones(self) -> None:
         """

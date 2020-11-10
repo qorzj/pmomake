@@ -1,6 +1,9 @@
-def main():
-    pass
+import sys
+from pmo.syntax import Project
 
 
-if __name__ == '__main__':
-    main()
+def entrypoint():
+    target = sys.argv[-1]
+    lines = open(target).read().splitlines()
+    project = Project(lines)
+    project.report()
