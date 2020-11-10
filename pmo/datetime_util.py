@@ -9,6 +9,10 @@ class IDatetime(Protocol):
     hours_of_day: int = 4
 
     @classmethod
+    def is_holiday(cls, date: Date):
+        return 5 <= date.weekday() <= 6
+
+    @classmethod
     def noon(cls, datetime: Datetime) -> Datetime:
         return datetime.replace(hour=12, minute=0, second=0, microsecond=0)
 
@@ -31,13 +35,23 @@ class IDatetime(Protocol):
         return cls.add(tomorrow_begin, minutes=left_minute)
 
     @classmethod
+    def skip_holiday(cls, datetime: Datetime, *, days: int) -> Datetime:
+        date = datetime.date()
+        if cls.is_holiday(date):
+            return cls.skip_holiday(datetime + Timedelta(days=1), days=days)
+        elif days <= 0:
+            return datetime
+        else:
+            return cls.skip_holiday(datetime + Timedelta(days=1), days=days - 1)
+
+    @classmethod
     def add(cls, datetime: Datetime, *, minutes: int) -> Datetime:
         if datetime < cls.day_begin(datetime):
             datetime = cls.day_begin(datetime)
         elif datetime > cls.day_end(datetime):
             datetime = cls.day_end(datetime)
         day_num, left_minute = minutes // (cls.hours_of_day * 60), minutes % (cls.hours_of_day * 60)
-        next_day = datetime + Timedelta(days=day_num)
+        next_day = cls.skip_holiday(datetime, days=day_num)
         return cls.day_to_next(next_day + Timedelta(minutes=left_minute))
 
     @classmethod
