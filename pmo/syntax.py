@@ -169,7 +169,7 @@ class Project:
             milestone.will_finish = None
         else:
             milestone.will_finish = IDatetime.add(will_finish, minutes=total_minute)
-        milestone.rank_weight = IDatetime.add(rank_weight, minutes=60 if total_minute >= 99999999 else total_minute)
+        milestone.rank_weight = IDatetime.add(rank_weight, minutes=60 if total_minute >= 99999999 else total_minute + 1)
         # 更新到milestone_index
         self.milestone_index[milestone_key] = milestone
         return milestone
