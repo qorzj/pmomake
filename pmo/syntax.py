@@ -115,9 +115,10 @@ class Project:
         """
         if not self.blocks:
             raise PmoGrammerError('至少需要一个milestone')
-        milestone: Milestone = self.blocks[0].dependence_line.milestone
         try:
-            self.dfs(milestone.key)
+            for block in self.blocks:
+                milestone: Milestone = block.dependence_line.milestone
+                self.dfs(milestone.key)
         except PmoGrammerError as e:
             print(e)
             exit(1)
