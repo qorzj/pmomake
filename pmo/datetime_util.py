@@ -2,15 +2,34 @@ from datetime import datetime as Datetime
 from datetime import date as Date
 from datetime import timedelta as Timedelta
 import re
-from typing import Protocol
+from typing import Protocol, Dict
 
 
 class IDatetime(Protocol):
-    hours_of_day: int = 4
+    hours_of_day: int = 4  # 一天工作日包含多少工作小时
+    predict_minutes: int = 0  # 预警时间
+    holiday_exclude_days = ''  # 节假日排除的日期
+    holiday_include_days = ''  # 节假日包含的日期
+
+    @classmethod
+    def load_options(cls, options: Dict):
+        if 'day' in options:
+            day_hours_opt = options['day']
+            assert day_hours_opt.endswith('h')
+            cls.hours_of_day = int(day_hours_opt.rstrip('h'))
+        if 'predict' in options:
+            predict_opt = options['predict']
+            cls.predict_minutes = cls.minute_of_str(predict_opt)
+        if 'exclude' in options:
+            cls.holiday_exclude_days = options['exclude']
+        if 'include' in options:
+            cls.holiday_include_days = options['include']
 
     @classmethod
     def is_holiday(cls, date: Date):
-        return 5 <= date.weekday() <= 6
+        is_weekend = 5 <= date.weekday() <= 6
+        date_str = str(date)
+        return (is_weekend and date_str not in cls.holiday_exclude_days) or date_str in cls.holiday_include_days
 
     @classmethod
     def noon(cls, datetime: Datetime) -> Datetime:

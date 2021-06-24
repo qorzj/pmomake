@@ -48,7 +48,7 @@ setup(
             ],
         keywords='pmomake pmo gantt',
         packages = ['pmo'],
-        install_requires=[],
+        install_requires=['requests'],
         cmdclass={'install': MyInstall},
         entry_points={
             'console_scripts': [

@@ -1,5 +1,6 @@
 from datetime import datetime as Datetime
 from typing import List, Optional, Union, NamedTuple, Dict
+import requests
 from pmo.estimate_time import EstimateTime, EstimateTimeTopic
 from pmo.syntax_util import split_into_blocks, starts_with_blank, is_milestone, promise_core, is_promise, is_date, is_unknown_time, is_estimate_time
 from pmo.datetime_util import IDatetime
@@ -54,12 +55,14 @@ class Project:
                 print(e)
                 exit(1)
 
-    def report(self) -> None:
+    def report(self, bot_key) -> None:
+        report_lines = []
         milestones = list(m for m in self.milestone_index.values() if m.done_date is None)
         milestones.sort(key = lambda m: m.rank_weight, reverse=True)
         deadline_error = False
-        print('  will_finish < milestone < due_date')
-        print('----------------------------------------')
+        last_task = ''
+        report_lines.append('  will_finish < milestone < due_date')
+        report_lines.append('----------------------------------------')
         now_at = Datetime.now()
         for milestone in milestones:
             safe_sign: str
@@ -80,10 +83,26 @@ class Project:
             else:
                 will_finish_str = '~' + str(milestone.rank_weight.date())
             due_date_str = str(milestone.due_date.date()) if milestone.due_date else ' ' * len('2000-01-01')
-            print(f'{safe_sign} {will_finish_str} < {milestone.key} < {due_date_str}')
+            report_lines.append(f'{safe_sign} {will_finish_str} < {milestone.key} < {due_date_str}')
+            last_task = milestone.key
         total = len(self.milestone_index)
         undone_count = len(milestones)
-        print('----------------------------------------')
+        report_lines.append('----------------------------------------')
+        report_text = '\n'.join(report_lines)
+        if bot_key:
+            bot_report_text = report_text + '\n'
+            if last_task:
+                bot_report_text += f'您目前的任务是[{last_task}]，'
+            if deadline_error:
+                bot_report_text += '任务计划异常，请尽快解决 :('
+            else:
+                bot_report_text += '任务计划正常，恭喜你 :D'
+            url = 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=' + bot_key
+            data = {"msgtype": "text", "text": {"content": bot_report_text}}
+            resp = requests.post(url, json=data)
+            if resp.status_code != 200 or resp.json()['errcode'] != 0:
+                print('企业微信机器人消息通知失败 - ' + resp.text)
+        print(report_text)
         if deadline_error:
             print(f'✗  {total - undone_count}/{total} milestones done.')
             exit(1)
