@@ -89,14 +89,11 @@ class Project:
         undone_count = len(milestones)
         report_lines.append('----------------------------------------')
         report_text = '\n'.join(report_lines)
-        if bot_key:
+        if bot_key and deadline_error:
             bot_report_text = report_text + '\n'
             if last_task:
                 bot_report_text += f'您目前的任务是[{last_task}]，'
-            if deadline_error:
-                bot_report_text += '任务计划异常，请尽快解决 :('
-            else:
-                bot_report_text += '任务计划正常，恭喜你 :D'
+            bot_report_text += '任务计划异常，请尽快解决 :('
             url = 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=' + bot_key
             data = {"msgtype": "text", "text": {"content": bot_report_text}}
             resp = requests.post(url, json=data)
