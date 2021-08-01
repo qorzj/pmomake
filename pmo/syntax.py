@@ -79,10 +79,10 @@ class Project:
             if safe_sign == '✗':
                 deadline_error = True
             if milestone.will_finish:
-                will_finish_str = ' ' + str(milestone.will_finish.date())
+                will_finish_str = ' ' + str(milestone.will_finish)
             else:
                 will_finish_str = '~' + str(milestone.rank_weight.date())
-            due_date_str = str(milestone.due_date.date()) if milestone.due_date else ' ' * len('2000-01-01')
+            due_date_str = str(milestone.due_date) if milestone.due_date else ' ' * len('2000-01-01')
             report_lines.append(f'{safe_sign} {will_finish_str} < {milestone.key} < {due_date_str}')
             last_task = milestone.key
         total = len(self.milestone_index)
@@ -135,7 +135,7 @@ class Project:
         block = self.block_index[milestone_key]
         for dependence_key in block.dependence_line.dependences:
             if isinstance(dependence_key, Datetime):
-                will_finish = max(will_finish, dependence_key)
+                will_finish = max(will_finish, dependence_key, IDatetime.day_begin(Datetime.now()))
                 rank_weight = max(rank_weight, dependence_key)
             else:
                 dependence: Optional[Milestone] = self.dfs(dependence_key)
@@ -271,7 +271,7 @@ class Milestone:
             date_part = date_part.strip()
             if not is_date(date_part):
                 raise PmoSyntaxError(f'Deadline日期"{date_part}"不合法')
-            self.due_date = IDatetime.noon_of_str(date_part.strip())
+            self.due_date = IDatetime.day_end(IDatetime.noon_of_str(date_part.strip()))
         else:
             name_part = word
         name_part = name_part.strip()
